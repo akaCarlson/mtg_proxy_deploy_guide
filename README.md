@@ -82,7 +82,7 @@ UsePAM yes
 PermitRootLogin prohibit-password
 ```
 
-Проверь синтаксис и перезапусти SSH. На Ubuntu/Debian сервис обычно называется `ssh`, а не `sshd`:
+Проверь синтаксис и перезапусти SSH:
 
 ```bash
 sshd -t
@@ -108,21 +108,31 @@ cd /opt/mtg
 
 ## 4. Скачать образ mtg
 
-Лучше использовать стабильный тег `nineseconds/mtg:2`, а не `latest`. Официальный README как раз показывает запуск образа `nineseconds/mtg:2`. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
+Лучше использовать стабильный тег `nineseconds/mtg:2`, а не `latest`.
 
 ```bash
 docker pull nineseconds/mtg:2
 ```
 
 ## 5. Сгенерировать секрет
+ОЧЕНЬ ВАЖНО ПРАВИЛЬНО ВЫПОЛНИТЬ ЭТОТ ПУНКТ:
+Перед генерацией секрета, проверь, зарегистрирован ли твой VPS в DNS:
+```bash
+nslookup ВНЕШНИЙ_IP_СЕРВЕРА
+```
+Если твой IP разрешается в какое-то доменное имя, подставь это имя вместо переменной DOMAIN в команде ниже.
 
-`mtg` умеет генерировать секрет сам. Для Docker официальный способ такой:
+Пример имени твоего VPS:
+```text
+vps3292487.trouble-free.net
+```
 
+Если IP не разрешается в имя, ищи через гугл ИИ, какие публичные сервисы сейчас расположены в той же подсети, что и адрес твоего VPS. Подставь имя такого сервиса вместо переменной DOMAIN в команде ниже.
+
+Сгенерируй секрет, подставив вместо DOMAIN имя своего VPS или другого публичного сервиса, расположенного в той же подсети, что и твой IP:
 ```bash
 docker run --rm nineseconds/mtg:2 generate-secret --hex DOMAIN
 ```
-
-Это подтверждено и в обсуждении проекта, и в общем описании запуска. ([GitHub](https://github.com/9seconds/mtg/discussions/250?utm_source=chatgpt.com "How to obtain a secret when using docker? · 9seconds mtg"))
 
 Пример:
 
@@ -136,15 +146,9 @@ docker run --rm nineseconds/mtg:2 generate-secret --hex auriga.com
 ee....................................
 ```
 
-### Какой домен подставлять в `generate-secret`
-
-Здесь важен не “самый известный незаблокированный домен”, а **правдоподобная маскировка**. В актуальном `BEST_PRACTICES.md` автор прямо пишет, что в 2026 уже недостаточно притворяться условным `microsoft.com` на VPS в чужом ASN: DNS/SNI/IP должны выглядеть согласованно, иначе такой трафик проще пометить как подозрительный. Лучший вариант — свой домен, указывающий на твой VPS, и веб-сайт перед mtg. ([GitHub](https://github.com/9seconds/mtg/blob/master/BEST_PRACTICES.md "mtg/BEST_PRACTICES.md at master · 9seconds/mtg · GitHub"))
-
-Для простого старта можно использовать нейтральный домен, но не стоит бездумно подставлять крупные внешние сайты типа `gosuslugi.ru` или `microsoft.com`, если твой IP к ним явно не относится. Автор отдельно предупреждает не маскироваться под `ok.ru` только потому, что у mtg есть хорошие предсобранные профили TLS-задержек: это не значит, что надо выдавать VPS-провайдерский IP за реальный IP этого сервиса. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
-
 ## 6. Создать минимальный конфиг
 
-В минимальном варианте нужны только `secret` и `bind-to`. Официальный README прямо говорит, что этого достаточно, а остальные параметры уже имеют sensible defaults. В example config также указано, что `mtg` поддерживает только FakeTLS, а секрет должен быть base64 или начинаться с `ee`. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
+В минимальном варианте нужны только `secret` и `bind-to`.
 
 Создай `/opt/mtg/config.toml`:
 
@@ -156,8 +160,6 @@ concurrency = 8192
 EOF
 ```
 
-Почему `3128`, а не `443`: внутри контейнера можно слушать `3128`, а наружу пробросить `443`. Официальный Docker-пример именно это и показывает: `-p 443:3128`, где `443` — внешний порт, а `3128` — порт из `bind-to`. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
-
 ## 7. Запустить контейнер
 
 ```bash
@@ -168,8 +170,6 @@ docker run -d \
   -p 443:3128 \
   nineseconds/mtg:2
 ```
-
-Это соответствует официальному способу запуска Docker-образа. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
 
 ## 8. Проверить, что mtg поднялся
 
@@ -186,7 +186,7 @@ ss -lntp | grep :443
     
 - `docker port mtg-proxy` покажет что-то вроде `3128/tcp -> 0.0.0.0:443`;
     
-- в логах нет фатальных ошибок. Формат `443:3128` важен: это и есть внешний и внутренний порт соответственно. ([GitHub](https://github.com/9seconds/mtg "GitHub - 9seconds/mtg: Highly opinionated MTPROTO proxy for Telegram · GitHub"))
+- в логах нет фатальных ошибок. Формат `443:3128` важен: это и есть внешний и внутренний порт соответственно. 
     
 
 ## 9. Открыть порт 443 в firewall
@@ -208,7 +208,6 @@ nc -vz IP_СЕРВЕРА 443
 ```
 
 ## 10. Сгенерировать правильную ссылку для Telegram
-
 
 ```bash
 docker exec mtg-proxy /mtg access -p 443 -i ВНЕШНИЙ_IP_СЕРВЕРА /config.toml
@@ -335,51 +334,3 @@ docker exec mtg-proxy /mtg access -p 443 -i ВНЕШНИЙ_IP /config.toml
     
 - **Максимум живучести**: собственный домен + правдоподобный сайт + при необходимости uplink через SOCKS5/VPN, как советует автор best practices. ([GitHub](https://github.com/9seconds/mtg/blob/master/BEST_PRACTICES.md "mtg/BEST_PRACTICES.md at master · 9seconds/mtg · GitHub"))
     
-## 16. Минимальный набор команд одной пачкой
-
-```bash
-apt update && apt -y upgrade
-apt -y install docker.io
-systemctl enable --now docker
-
-mkdir -p /opt/mtg
-cd /opt/mtg
-
-docker pull nineseconds/mtg:2
-
-docker run --rm nineseconds/mtg:2 generate-secret --hex auriga.com
-```
-
-Создай `/opt/mtg/config.toml`:
-
-```toml
-secret = "ТВОЙ_SECRET"
-bind-to = "0.0.0.0:3128"
-concurrency = 8192
-```
-
-Запусти:
-
-```bash
-docker run -d \
-  --name mtg-proxy \
-  --restart unless-stopped \
-  -v /opt/mtg/config.toml:/config.toml:ro \
-  -p 443:3128 \
-  nineseconds/mtg:2
-```
-
-Открой порт:
-
-```bash
-ufw allow 443/tcp
-ufw reload
-```
-
-Сгенерируй правильную ссылку:
-
-```bash
-docker exec mtg-proxy /mtg access -p 443 -i ВНЕШНИЙ_IP_СЕРВЕРА /config.toml
-```
-
-Если хочешь, я следующим сообщением могу оформить эту инструкцию еще и в виде **короткого чеклиста-командника без пояснений**, чтобы можно было просто держать под рукой.
